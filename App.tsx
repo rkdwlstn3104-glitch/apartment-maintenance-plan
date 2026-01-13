@@ -11,7 +11,7 @@ import ExecutionModal from './components/ExecutionModal';
 import VersionHistory from './components/VersionHistory';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { MaintenanceItem, Apartment, MaintenanceStandard, MaintenanceHistory, PlanSnapshot } from './types';
-import { APARTMENTS, DEFAULT_SEED_STANDARDS, getInitialItems } from './constants';
+import { APARTMENTS, DEFAULT_SEED_STANDARDS, getInitialItems, generateInitialItemsForApt } from './constants';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -91,7 +91,7 @@ const App: React.FC = () => {
           id: h.id, itemId: h.item_id, apartmentId: h.apartment_id, itemName: h.item_name, executionYear: h.execution_year, executionDate: h.execution_date, plannedCost: h.planned_cost, actualCost: h.actual_cost, contractor: h.contractor, remarks: h.remarks, createdAt: h.created_at
         })));
         if (snapRes.data) setSnapshots(snapRes.data.map(s => ({
-          id: s.id, apartmentId: s.apartment_id, versionName: s.version_name, createdAt: s.created_at, itemCount: s.item_count, totalCost: s.total_cost, items: s.items
+          id: s.id, apartmentId: s.apartment_id, versionName: s.version_name, createdAt: s.created_at, itemCount: s.item_count, totalCost: safeNum(s.total_cost), items: s.items
         })));
       }
     } catch (err) {
@@ -110,34 +110,33 @@ const App: React.FC = () => {
   useEffect(() => { loadData(); }, []);
 
   const handleUpdateItems = async (updatedItems: MaintenanceItem[]) => {
-    const updatedMap = new Map(updatedItems.map(i => [i.id, i]));
-    setAllItems(prev => prev.map(item => updatedMap.get(item.id) || item));
+    setAllItems(prev => {
+      const updatedMap = new Map(updatedItems.map(i => [i.id, i]));
+      const existingUpdated = prev.map(item => updatedMap.get(item.id) || item);
+      const existingIds = new Set(prev.map(i => i.id));
+      const newItemsToAdd = updatedItems.filter(i => !existingIds.has(i.id));
+      return [...existingUpdated, ...newItemsToAdd];
+    });
     
     if (!isDemoMode && isSupabaseConfigured && supabase) {
-      const dbPayload = updatedItems.map(item => ({
-        id: item.id, apartment_id: item.apartmentId, code: item.code, category: item.mainCategory,
-        sub_category: item.subCategory, item: item.item, method: item.method, unit: item.unit,
-        unit_price: item.unitPrice, repair_rate: item.repairRate, cycle_years: item.cycleYears,
-        facility_size: item.facilitySize, quantity: item.quantity, 
-        last_repair_year: item.lastRepairYear, next_repair_year: item.nextRepairYear,
-        estimated_cost: item.estimatedCost, status: item.status,
-        is_executed: item.isExecuted, is_manual: item.isManual, actual_cost: item.actualCost, remarks: item.remarks
-      }));
-      await supabase.from('maintenance_items').upsert(dbPayload);
-    }
-  };
-
-  const handleCancelExecute = async (item: MaintenanceItem) => {
-    if (!window.confirm(`[${item.item}]의 집행 완료 처리를 취소하시겠습니까?\n관련 이력도 함께 삭제됩니다.`)) return;
-    try {
-      if (!isDemoMode && isSupabaseConfigured && supabase) {
-        await supabase.from('maintenance_history').delete().eq('item_id', item.id);
+      try {
+        const dbPayload = updatedItems.map(item => ({
+          id: item.id, apartment_id: item.apartmentId, code: item.code, category: item.mainCategory,
+          sub_category: item.subCategory, item: item.item, method: item.method, unit: item.unit,
+          unit_price: item.unitPrice, repair_rate: item.repairRate, cycle_years: item.cycleYears,
+          facility_size: item.facilitySize, quantity: item.quantity, 
+          last_repair_year: item.lastRepairYear, next_repair_year: item.nextRepairYear,
+          estimated_cost: item.estimatedCost, status: item.status,
+          is_executed: item.isExecuted, is_manual: item.isManual, actual_cost: item.actualCost, remarks: item.remarks,
+          material: item.breakdown?.material || 0,
+          labor: item.breakdown?.labor || 0,
+          expense: item.breakdown?.expense || 0
+        }));
+        const { error } = await supabase.from('maintenance_items').upsert(dbPayload);
+        if (error) throw error;
+      } catch (err) {
+        console.error("DB Update Error:", err);
       }
-      setHistories(prev => prev.filter(h => h.itemId !== item.id));
-      await handleUpdateItems([{ ...item, isExecuted: false, actualCost: 0 }]);
-      alert("집행 취소 완료");
-    } catch (err) {
-      alert("취소 중 오류 발생");
     }
   };
 
@@ -145,6 +144,80 @@ const App: React.FC = () => {
   const filteredItems = useMemo(() => selectedApt ? allItems.filter(i => i.apartmentId === selectedApt.id) : [], [allItems, selectedApt]);
   const filteredHistories = useMemo(() => selectedAptId ? histories.filter(h => h.apartmentId === selectedAptId) : [], [histories, selectedAptId]);
   const aptSnapshots = useMemo(() => snapshots.filter(s => s.apartmentId === selectedAptId), [snapshots, selectedAptId]);
+
+  const handleInitializePlan = async () => {
+    if (!selectedApt || !selectedAptId) return;
+
+    const standardsToUse = masterStandards.length > 0 ? masterStandards : DEFAULT_SEED_STANDARDS;
+    const isUsingSeed = masterStandards.length === 0;
+
+    const confirmMsg = isUsingSeed 
+      ? "마스터 DB가 비어있습니다. 기본 권장 항목(Seed)을 불러와 계획을 수립하시겠습니까?"
+      : "마스터 DB의 표준 항목을 불러와 계획을 수립하시겠습니까?\n(기존에 등록된 동일 코드는 제외됩니다)";
+
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const newItems = generateInitialItemsForApt(selectedApt, standardsToUse);
+      const existingCodes = new Set(filteredItems.map(i => i.code));
+      const itemsToAdd = newItems.filter(ni => !existingCodes.has(ni.code));
+
+      if (itemsToAdd.length === 0) {
+        alert("새로 추가할 항목이 없습니다.");
+        return;
+      }
+
+      await handleUpdateItems(itemsToAdd);
+      alert(`${itemsToAdd.length}개의 항목을 불러왔습니다.`);
+    } catch (err) {
+      console.error("Initialize Plan Error:", err);
+      alert("항목 불러오기 중 오류가 발생했습니다.");
+    }
+  };
+
+  const handleSaveSnapshot = async () => {
+    if (!selectedAptId || !selectedApt) return;
+    const versionName = prompt("버전 명칭:", `${new Date().toLocaleDateString()} 수립안`);
+    if (!versionName) return;
+
+    const totalCost = filteredItems.reduce((sum, i) => sum + (Number(i.estimatedCost) || 0) * 10000, 0);
+    const snapshot: PlanSnapshot = {
+      id: crypto.randomUUID(),
+      apartmentId: selectedAptId,
+      versionName,
+      createdAt: new Date().toISOString(),
+      itemCount: filteredItems.length,
+      totalCost,
+      items: JSON.parse(JSON.stringify(filteredItems))
+    };
+
+    if (!isDemoMode && isSupabaseConfigured && supabase) {
+      await supabase.from('plan_snapshots').insert({
+        id: snapshot.id,
+        apartment_id: snapshot.apartmentId,
+        version_name: snapshot.versionName,
+        item_count: snapshot.itemCount,
+        total_cost: snapshot.totalCost,
+        items: snapshot.items
+      });
+    }
+    
+    setSnapshots(prev => [snapshot, ...prev]);
+    alert("버전 저장 완료");
+  };
+
+  const handleCancelExecute = async (item: MaintenanceItem) => {
+    if (!window.confirm(`[${item.item}] 집행 취소하시겠습니까?`)) return;
+    try {
+      if (!isDemoMode && isSupabaseConfigured && supabase) {
+        await supabase.from('maintenance_history').delete().eq('item_id', item.id);
+      }
+      setHistories(prev => prev.filter(h => h.itemId !== item.id));
+      await handleUpdateItems([{ ...item, isExecuted: false, actualCost: 0 }]);
+    } catch (err) {
+      alert("취소 실패");
+    }
+  };
 
   return (
     <div className="flex min-h-screen bg-slate-50 font-inter text-slate-900">
@@ -170,18 +243,24 @@ const App: React.FC = () => {
               {activeTab === 'dashboard' && selectedApt && <Dashboard items={filteredItems} selectedApt={selectedApt} histories={filteredHistories} />}
               {activeTab === 'plan' && selectedApt && (
                 <PlanTable 
-                  items={filteredItems} masterStandards={masterStandards} planPeriod={selectedApt.planPeriod} inflationRate={selectedApt.inflationRate || 0} 
+                  items={filteredItems} 
+                  masterStandards={masterStandards} 
+                  planPeriod={selectedApt.planPeriod} 
+                  inflationRate={selectedApt.inflationRate || 0} 
                   onUpdate={handleUpdateItems} 
+                  onInitialize={handleInitializePlan}
+                  onSaveVersion={handleSaveSnapshot}
                   onAdd={(std) => {
                     const newItem: MaintenanceItem = { ...std, id: crypto.randomUUID(), apartmentId: selectedAptId!, facilitySize: 0, quantity: 1, nextRepairYear: 2025 + std.cycleYears, estimatedCost: 0, status: '정상' as const };
-                    setAllItems(prev => [...prev, newItem]);
                     handleUpdateItems([newItem]);
                   }} 
                   onDelete={(id) => {
                     setAllItems(prev => prev.filter(i => i.id !== id));
                     if (!isDemoMode && isSupabaseConfigured && supabase) supabase.from('maintenance_items').delete().eq('id', id);
                   }} 
-                  apartmentName={selectedApt.name} onExecute={(item) => setExecutingItem(item)} onCancelExecute={handleCancelExecute}
+                  apartmentName={selectedApt.name} 
+                  onExecute={(item) => setExecutingItem(item)} 
+                  onCancelExecute={handleCancelExecute}
                 />
               )}
               {activeTab === 'apartment-info' && (
@@ -189,19 +268,15 @@ const App: React.FC = () => {
                   apartment={selectedApt} 
                   onUpdate={async (apt) => {
                     const isNew = !apartments.find(a => a.id === apt.id);
-                    
                     setApartments(prev => {
                       if (isNew) return [...prev, apt];
                       return prev.map(a => a.id === apt.id ? { ...a, ...apt } : a);
                     });
-                    
                     if (isNew) {
                       setSelectedAptId(apt.id);
                       prevAptIdRef.current = apt.id;
                     }
-
                     if (!isDemoMode && isSupabaseConfigured && supabase) {
-                      // 1. 단지 기본 정보
                       await supabase.from('apartments').upsert({ 
                         id: apt.id, 
                         name: apt.name, 
@@ -209,41 +284,34 @@ const App: React.FC = () => {
                         plan_period: apt.planPeriod, 
                         inflation_rate: apt.inflationRate 
                       });
-                      
-                      // 2. 세대 유형 정보 (삭제 후 재등록 전략)
                       await supabase.from('unit_types').delete().eq('apartment_id', apt.id);
                       if (apt.unitTypes && apt.unitTypes.length > 0) {
-                        const unitPayload = apt.unitTypes.map(u => ({
-                          id: u.id,
-                          apartment_id: apt.id,
-                          type: u.type,
-                          private_area: u.privateArea,
-                          common_area: u.supplyArea,
-                          households: u.households
-                        }));
-                        await supabase.from('unit_types').insert(unitPayload);
+                        await supabase.from('unit_types').insert(apt.unitTypes.map(u => ({ 
+                          id: u.id, 
+                          apartment_id: apt.id, 
+                          type: u.type, 
+                          private_area: u.privateArea, 
+                          common_area: u.supplyArea, 
+                          households: u.households 
+                        })));
                       }
-                      
-                      // 3. 연차별 적립 요율 정보 (무결성을 위한 삭제 후 재등록 전략)
                       await supabase.from('annual_rates').delete().eq('apartment_id', apt.id);
                       if (apt.annualRates && apt.annualRates.length > 0) {
-                        const ratePayload = apt.annualRates.map(r => ({
-                          id: r.id,
-                          apartment_id: apt.id,
-                          start_period: r.startPeriod,
-                          end_period: r.endPeriod,
-                          rate: safeNum(r.rate)
-                        }));
-                        await supabase.from('annual_rates').insert(ratePayload);
+                        await supabase.from('annual_rates').insert(apt.annualRates.map(r => ({ 
+                          id: r.id, 
+                          apartment_id: apt.id, 
+                          start_period: r.startPeriod, 
+                          end_period: r.endPeriod, 
+                          rate: safeNum(r.rate) 
+                        })));
                       }
                     }
-                    alert(isNew ? "새 단지 등록 완료" : "변경사항 저장 완료");
                   }} 
                   onAdd={() => { if (selectedAptId) prevAptIdRef.current = selectedAptId; setSelectedAptId(null); }} 
                   onCancelAdd={() => { setSelectedAptId(prevAptIdRef.current || (apartments.length > 0 ? apartments[0].id : null)); }}
                   onDelete={async () => {
                     if (!selectedAptId) return;
-                    if (!window.confirm("단지를 삭제하시겠습니까? 관련한 모든 데이터가 삭제됩니다.")) return;
+                    if (!window.confirm("삭제하시겠습니까?")) return;
                     if (!isDemoMode && isSupabaseConfigured && supabase) await supabase.from('apartments').delete().eq('id', selectedAptId);
                     const remaining = apartments.filter(a => a.id !== selectedAptId);
                     setApartments(remaining);
@@ -262,12 +330,22 @@ const App: React.FC = () => {
                   onUpdate={async (stds) => {
                     setMasterStandards(stds);
                     if (!isDemoMode && isSupabaseConfigured && supabase) {
-                      const dbPayload = stds.map(s => ({
-                        id: s.id, code: s.code, category: s.mainCategory, sub_category: s.subCategory, item: s.item, method: s.method, unit: s.unit,
-                        unit_price: s.unitPrice, repair_rate: s.repairRate, cycle_years: s.cycleYears, last_repair_year: s.lastRepairYear, 
-                        material: s.breakdown.material, labor: s.breakdown.labor, expense: s.breakdown.expense
-                      }));
-                      await supabase.from('maintenance_standards').upsert(dbPayload);
+                      await supabase.from('maintenance_standards').upsert(stds.map(s => ({ 
+                        id: s.id, 
+                        code: s.code, 
+                        category: s.mainCategory, 
+                        sub_category: s.subCategory, 
+                        item: s.item, 
+                        method: s.method, 
+                        unit: s.unit, 
+                        unit_price: s.unitPrice, 
+                        repair_rate: s.repairRate, 
+                        cycle_years: s.cycleYears, 
+                        last_repair_year: s.lastRepairYear, 
+                        material: s.breakdown.material, 
+                        labor: s.breakdown.labor, 
+                        expense: s.breakdown.expense 
+                      })));
                     }
                   }} 
                   onDelete={async (id) => { setMasterStandards(prev => prev.filter(s => s.id !== id)); if (!isDemoMode && isSupabaseConfigured && supabase) await supabase.from('maintenance_standards').delete().eq('id', id); }} 
@@ -282,24 +360,48 @@ const App: React.FC = () => {
 
       {executingItem && (
         <ExecutionModal 
-          item={executingItem} onClose={() => setExecutingItem(null)} 
+          item={executingItem} 
+          onClose={() => setExecutingItem(null)} 
           onConfirm={async (data) => {
             const currentItem = executingItem;
             if (!currentItem) return;
             const h: MaintenanceHistory = { 
-              id: crypto.randomUUID(), itemId: currentItem.id, apartmentId: selectedAptId!, itemName: currentItem.item, 
-              executionYear: new Date(data.executionDate).getFullYear(), executionDate: data.executionDate, 
-              plannedCost: currentItem.estimatedCost * 10000, actualCost: data.actualCost, contractor: data.contractor, remarks: data.remarks, createdAt: new Date().toISOString() 
+              id: crypto.randomUUID(), 
+              itemId: currentItem.id, 
+              apartmentId: selectedAptId!, 
+              itemName: currentItem.item, 
+              executionYear: new Date(data.executionDate).getFullYear(), 
+              executionDate: data.executionDate, 
+              plannedCost: safeNum(currentItem.estimatedCost) * 10000, 
+              actualCost: data.actualCost, 
+              contractor: data.contractor, 
+              remarks: data.remarks, 
+              createdAt: new Date().toISOString() 
             };
+            
             if (!isDemoMode && isSupabaseConfigured && supabase) {
-              await supabase.from('maintenance_history').insert({
-                id: h.id, item_id: h.itemId, apartment_id: h.apartmentId, item_name: h.itemName, 
-                execution_year: h.executionYear, execution_date: h.executionDate, planned_cost: h.plannedCost, 
-                actual_cost: h.actualCost, contractor: h.contractor, remarks: h.remarks
+              await supabase.from('maintenance_history').insert({ 
+                id: h.id, 
+                item_id: h.itemId, 
+                apartment_id: h.apartmentId, 
+                item_name: h.itemName, 
+                execution_year: h.executionYear, 
+                execution_date: h.executionDate, 
+                planned_cost: h.plannedCost, 
+                actual_cost: h.actualCost, 
+                contractor: h.contractor, 
+                remarks: h.remarks 
               });
             }
+            
             setHistories(prev => [h, ...prev]);
-            handleUpdateItems([{ ...currentItem, isExecuted: true, actualCost: data.actualCost / 10000, lastRepairYear: h.executionYear, nextRepairYear: h.executionYear + currentItem.cycleYears }]);
+            handleUpdateItems([{ 
+              ...currentItem, 
+              isExecuted: true, 
+              actualCost: data.actualCost / 10000, 
+              lastRepairYear: h.executionYear, 
+              nextRepairYear: h.executionYear + currentItem.cycleYears 
+            }]);
             setExecutingItem(null);
           }} 
         />

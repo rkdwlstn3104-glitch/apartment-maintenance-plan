@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { MaintenanceItem, Apartment, MaintenanceHistory } from '../types';
 import SummaryReport from './SummaryReport';
 import ItemizedReport from './ItemizedReport';
@@ -30,6 +30,19 @@ const PlanReport: React.FC<PlanReportProps> = ({ items, apartment, histories = [
   const reportRef = useRef<HTMLDivElement>(null);
   
   const startYear = apartment.planStartYear || (new Date(apartment.approvalDate).getFullYear() + 1);
+  const endYear = startYear + (apartment.planPeriod || 40) - 1;
+
+  // 출력 연도 범위 상태
+  const [rangeStart, setRangeStart] = useState<number>(startYear);
+  const [rangeEnd, setRangeEnd] = useState<number>(endYear);
+
+  const availableYears = useMemo(() => {
+    const years = [];
+    for (let i = startYear; i <= endYear; i++) {
+      years.push(i);
+    }
+    return years;
+  }, [startYear, endYear]);
 
   const handleReportSelect = (type: ReportType) => {
     setSelectedReport(type);
@@ -144,6 +157,42 @@ const PlanReport: React.FC<PlanReportProps> = ({ items, apartment, histories = [
             </button>
           ))}
         </div>
+
+        {/* 연도별 집행계획표 전용 설정 UI */}
+        {selectedReport === 'yearly_execution_plan' && (
+          <div className="mt-6 px-4 animate-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-white border border-slate-200 p-6 rounded-[2.5rem] shadow-sm">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <i className="fas fa-sliders text-blue-600"></i> 출력 연도 범위 설정
+              </h4>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[9px] font-bold text-slate-500 mb-1 block">시작 연도</label>
+                  <select 
+                    value={rangeStart} 
+                    onChange={(e) => setRangeStart(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 text-xs font-black outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  >
+                    {availableYears.map(y => <option key={y} value={y}>{y}년</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-slate-500 mb-1 block">종료 연도</label>
+                  <select 
+                    value={rangeEnd} 
+                    onChange={(e) => setRangeEnd(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 text-xs font-black outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  >
+                    {availableYears.filter(y => y >= rangeStart).map(y => <option key={y} value={y}>{y}년</option>)}
+                  </select>
+                </div>
+              </div>
+              <p className="text-[9px] text-slate-400 mt-4 leading-relaxed font-medium">
+                * 설정한 연도 범위에 맞춰 표가 자동 chunk(20년 단위)되어 생성됩니다.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 bg-white rounded-[3.5rem] border border-slate-200 shadow-2xl overflow-hidden min-h-[1200px] relative flex flex-col">
@@ -166,7 +215,15 @@ const PlanReport: React.FC<PlanReportProps> = ({ items, apartment, histories = [
           {selectedReport === 'combined_full_report' && <SummaryReport items={items} apartment={apartment} startYear={startYear} />}
           {selectedReport === 'itemized_full_plan' && <ItemizedReport items={items} apartment={apartment} startYear={startYear} />}
           {selectedReport === 'item_detail_status' && <ItemDetailStatusReport items={items} apartment={apartment} />}
-          {selectedReport === 'yearly_execution_plan' && <YearlyMatrixReport items={items} apartment={apartment} startYear={startYear} />}
+          {selectedReport === 'yearly_execution_plan' && (
+            <YearlyMatrixReport 
+              items={items} 
+              apartment={apartment} 
+              startYear={startYear} 
+              customStartYear={rangeStart}
+              customEndYear={rangeEnd}
+            />
+          )}
           {selectedReport === 'strategic_budget_analysis' && <StrategicAnalysisReport items={items} apartment={apartment} startYear={startYear} />}
           {selectedReport === 'execution_performance_report' && <ExecutionPerformanceReport histories={histories} apartment={apartment} />}
           {selectedReport === 'execution_history_list' && <ExecutionHistoryReport histories={histories} apartment={apartment} />}

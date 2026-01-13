@@ -6,6 +6,8 @@ interface YearlyMatrixReportProps {
   items: MaintenanceItem[];
   apartment: Apartment;
   startYear: number;
+  customStartYear?: number;
+  customEndYear?: number;
 }
 
 const CATEGORY_GROUPS = [
@@ -18,10 +20,9 @@ const CATEGORY_GROUPS = [
 ];
 
 /**
- * 특정 연도에 수선비용이 발생하는지 확인하고 금액을 반환하는 함수
- * 재계산하지 않고 item.estimatedCost(만원)를 기반으로 배분하여 오차를 없앰
+ * 특정 연도에 발생하는 수선비용을 마스터 계획표의 'estimatedCost(만원)' 기준으로 산출합니다.
  */
-const getCostInYear = (item: MaintenanceItem, year: number, startYear: number) => {
+const getAllocatedCostInYearManWon = (item: MaintenanceItem, year: number, startYear: number) => {
   const cycle = Math.max(1, Number(item.cycleYears));
   const last = Number(item.lastRepairYear) || (startYear - 1);
   const quantity = Number(item.quantity) || 0;
@@ -30,29 +31,41 @@ const getCostInYear = (item: MaintenanceItem, year: number, startYear: number) =
   if (quantity <= 0 || totalEstimatedCostManWon <= 0) return 0;
 
   if (year > last && (year - last) % cycle === 0) {
+    // 마스터 데이터의 총액을 수선횟수로 나누어 배분 (단위: 만원)
     return totalEstimatedCostManWon / quantity;
   }
   return 0;
 };
 
-const YearlyMatrixReport: React.FC<YearlyMatrixReportProps> = ({ items, apartment, startYear }) => {
+const YearlyMatrixReport: React.FC<YearlyMatrixReportProps> = ({ items, apartment, startYear, customStartYear, customEndYear }) => {
   const planPeriod = apartment.planPeriod || 40;
   const planEndYear = startYear + planPeriod - 1;
 
+  // 출력 시작 연도 결정 (Props가 있으면 사용, 없으면 자동 계산)
   const effectiveGridStartYear = useMemo(() => {
+    if (customStartYear) return customStartYear;
+    
     const lastYears = items.map(i => Number(i.lastRepairYear) || 0).filter(y => y > 0);
     const maxLast = lastYears.length > 0 ? Math.max(...lastYears) : (startYear - 1);
     return Math.max(startYear, maxLast + 1);
-  }, [items, startYear]);
+  }, [items, startYear, customStartYear]);
 
+  // 출력 종료 연도 결정
+  const effectiveGridEndYear = useMemo(() => {
+    if (customEndYear) return customEndYear;
+    return planEndYear;
+  }, [planEndYear, customEndYear]);
+
+  // 가시적 연도 리스트 생성
   const visibleYears = useMemo(() => {
     const years: number[] = [];
-    for (let y = effectiveGridStartYear; y <= planEndYear; y++) {
+    for (let y = effectiveGridStartYear; y <= effectiveGridEndYear; y++) {
       years.push(y);
     }
     return years;
-  }, [effectiveGridStartYear, planEndYear]);
+  }, [effectiveGridStartYear, effectiveGridEndYear]);
 
+  // 연도를 20개 단위로 청킹 (A3 가로 인쇄 최적화)
   const yearChunks = useMemo(() => {
     const chunks: number[][] = [];
     for (let i = 0; i < visibleYears.length; i += 20) {
@@ -61,18 +74,17 @@ const YearlyMatrixReport: React.FC<YearlyMatrixReportProps> = ({ items, apartmen
     return chunks.length > 0 ? chunks : [[]];
   }, [visibleYears]);
 
-  // 컬럼 너비 재조정 (전체 합계 100% 내외 유지)
   const colWidths = {
     subCategory: '4%',
-    item: '8.5%',   // 9% -> 8.5%
+    item: '8.5%',
     method: '2%',
     cycle: '2%',
     rate: '2%',
     last: '3%',
     oneTime: '3%',
     totalPlan: '3.5%',
-    remarks: '8%',    // 5% -> 8% (확장)
-    year: '3.1%'      // 20개 * 3.1% = 62%
+    remarks: '8%',
+    year: '3.1%'
   };
 
   return (
@@ -81,8 +93,9 @@ const YearlyMatrixReport: React.FC<YearlyMatrixReportProps> = ({ items, apartmen
         const pageProcessedGroups = CATEGORY_GROUPS.map(group => {
           const groupItems = items.filter(item => group.categories.includes(item.mainCategory));
           const yearlyCosts = years.map(year => 
-            groupItems.reduce((sum, item) => sum + getCostInYear(item, year, startYear), 0)
+            groupItems.reduce((sum, item) => sum + getAllocatedCostInYearManWon(item, year, startYear), 0)
           );
+          // 그룹별 총 예산은 마스터의 estimatedCost 합계
           const globalTotalForItems = groupItems.reduce((sum, item) => sum + (Number(item.estimatedCost) || 0), 0);
           return { ...group, items: groupItems, globalTotal: globalTotalForItems, yearlyCosts };
         });
@@ -93,15 +106,13 @@ const YearlyMatrixReport: React.FC<YearlyMatrixReportProps> = ({ items, apartmen
           <div key={chunkIdx} className="p-8 page-break-after-always" style={{ pageBreakAfter: 'always', margin: '0 auto' }}>
             <div className="mb-4 flex justify-between items-end border-b-2 border-black pb-2">
               <div className="text-[8.5pt] font-black text-slate-500 w-[20%]">
-                출력구간: {years.length > 0 ? `${years[0]}~${years[years.length - 1]}년` : '-'}<br/>
+                출력구간: {effectiveGridStartYear}~{effectiveGridEndYear}년<br/>
                 계획종료: {planEndYear}년
               </div>
               <h1 className="text-2xl font-black text-center flex-1">
                 {apartment.name} 연도별 집행계획표
               </h1>
-              <div className="w-[20%] text-right text-[8.5pt] font-bold">
-                {chunkIdx + 1} / {yearChunks.length}
-              </div>
+              <div className="w-[20%]"></div>
             </div>
 
             <table className="w-full border-collapse border-2 border-black table-fixed" style={{ fontSize: '7pt' }}>
@@ -149,7 +160,7 @@ const YearlyMatrixReport: React.FC<YearlyMatrixReportProps> = ({ items, apartmen
                       ))}
                     </tr>
                     {group.items.map(item => {
-                      const costs = years.map(y => getCostInYear(item, y, startYear));
+                      const costs = years.map(y => getAllocatedCostInYearManWon(item, y, startYear));
                       const totalEstimatedCost = Number(item.estimatedCost) || 0;
                       const quantity = Number(item.quantity) || 1;
                       const oneTimeManWon = quantity > 0 ? totalEstimatedCost / quantity : 0;
