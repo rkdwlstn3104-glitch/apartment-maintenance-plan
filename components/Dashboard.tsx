@@ -16,8 +16,9 @@ const Dashboard: React.FC<DashboardProps> = ({ items = [], selectedApt, historie
   const [useInflation, setUseInflation] = useState(true);
   
   const currentYear = new Date().getFullYear();
+  // selectedApt가 없을 경우를 대비한 방어 로직
   const planPeriod = Math.min(100, Math.max(1, Number(selectedApt?.planPeriod) || 40));
-  const globalInflationRate = selectedApt.inflationRate || 2.5;
+  const globalInflationRate = selectedApt?.inflationRate ?? 2.5;
 
   const safeNum = (val: any, fallback = 0) => {
     const n = parseFloat(val);
@@ -31,7 +32,6 @@ const Dashboard: React.FC<DashboardProps> = ({ items = [], selectedApt, historie
     let reviewCount = 0;
     
     items.forEach(item => {
-      // estimatedCost is already in Man-Won
       totalPlanCost += safeNum(item.estimatedCost) * 10000;
       if (item.status === '긴급') urgentCount++;
       if (item.status === '검토필요') reviewCount++;
@@ -40,32 +40,28 @@ const Dashboard: React.FC<DashboardProps> = ({ items = [], selectedApt, historie
     return { totalPlanCost, urgentCount, reviewCount, totalItemCount: items.length };
   }, [items]);
 
-  // 2. 연도별 예상 지출 (향후 10년)
+  // 2. 연도별 예상 지출 (향후 12년)
   const yearlyForecast = useMemo(() => {
     const data = [];
     let hasActualData = false;
 
-    for (let i = 0; i < 12; i++) { // 12년으로 확장하여 더 많은 데이터 노출
+    for (let i = 0; i < 12; i++) {
       const year = currentYear + i;
       let totalYearCost = 0;
       
       items.forEach(item => {
         const nextYear = Number(item.nextRepairYear);
-        // 만약 차기수선연도가 해당 년도라면 (또는 주기적으로 해당 년도에 걸린다면)
         if (nextYear === year) {
-          // item.estimatedCost는 40년치 총액이므로, 1회 수선 비용으로 역산
           const cycle = Math.max(1, Number(item.cycleYears));
           const repairRate = Number(item.repairRate) || 100;
           const totalRepairCount = Math.round((planPeriod / cycle) * (repairRate / 100) * 10) / 10;
           
-          // 1회 수선비 = 총 계획 예산 / 총 수선 횟수
           const oneTimeCostManWon = totalRepairCount > 0 
             ? safeNum(item.estimatedCost) / totalRepairCount 
             : safeNum(item.unitPrice) * safeNum(item.facilitySize) * (repairRate / 100);
           
           let cost = oneTimeCostManWon;
           
-          // 물가상승 반영 시 미래가치 계산
           if (useInflation) {
             const yearsDiff = Math.max(0, year - currentYear);
             cost = cost * Math.pow(1 + (globalInflationRate / 100), yearsDiff);
@@ -78,7 +74,7 @@ const Dashboard: React.FC<DashboardProps> = ({ items = [], selectedApt, historie
       if (totalYearCost > 0) hasActualData = true;
       data.push({ 
         year: `${year}년`, 
-        cost: Math.round(totalYearCost), // 단위: 만원
+        cost: Math.round(totalYearCost), 
         rawCost: totalYearCost * 10000 
       });
     }
@@ -111,6 +107,15 @@ const Dashboard: React.FC<DashboardProps> = ({ items = [], selectedApt, historie
 
   const COLORS = ['#2563eb', '#4f46e5', '#7c3aed', '#db2777', '#ea580c', '#ca8a04', '#16a34a', '#0891b2'];
 
+  if (!selectedApt) {
+    return (
+      <div className="flex flex-col items-center justify-center py-40 bg-white rounded-[2.5rem] border border-slate-200">
+        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mb-4"></div>
+        <p className="text-xs font-black text-slate-400">단지 데이터를 분석 중입니다...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-700">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -118,7 +123,7 @@ const Dashboard: React.FC<DashboardProps> = ({ items = [], selectedApt, historie
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">계획 전략 대시보드</h2>
           <p className="text-slate-500 text-xs font-black mt-1 uppercase tracking-widest flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            단지 수선 현황 및 재무 리스크 분석
+            {selectedApt.name} 수선 현황 분석
           </p>
         </div>
         <div className="flex bg-white p-1 rounded-2xl border border-slate-200 shadow-sm">
@@ -172,7 +177,6 @@ const Dashboard: React.FC<DashboardProps> = ({ items = [], selectedApt, historie
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-100">
                 <i className="fas fa-chart-bar text-slate-200 text-5xl mb-4"></i>
                 <p className="text-slate-400 text-sm font-black">수선 예정 데이터가 없습니다.</p>
-                <p className="text-slate-300 text-[10px] mt-1">계획 관리 탭에서 차기수선연도를 확인하세요.</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -182,10 +186,12 @@ const Dashboard: React.FC<DashboardProps> = ({ items = [], selectedApt, historie
                   <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} />
                   <Tooltip cursor={{fill: '#f8fafc'}} content={({ active, payload }) => {
                     if (active && payload && payload.length) {
+                      // Fix TS2345: 명시적 숫자 변환 추가
+                      const val = Number(payload[0].value ?? 0);
                       return (
                         <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-slate-800">
                           <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">{payload[0].payload.year}</p>
-                          <p className="text-base font-black text-blue-400">₩{Math.round(payload[0].value).toLocaleString()} 만원</p>
+                          <p className="text-base font-black text-blue-400">₩{Math.round(val).toLocaleString()} 만원</p>
                         </div>
                       );
                     }
@@ -220,10 +226,12 @@ const Dashboard: React.FC<DashboardProps> = ({ items = [], selectedApt, historie
                   </Pie>
                   <Tooltip content={({ active, payload }) => {
                     if (active && payload && payload.length) {
+                      // Fix TS2345: 명시적 숫자 변환 추가
+                      const val = Number(payload[0].value ?? 0);
                       return (
                         <div className="bg-white p-4 rounded-2xl shadow-xl border border-slate-100">
                           <p className="text-xs font-black text-slate-900 mb-1">{payload[0].name}</p>
-                          <p className="text-sm font-black text-blue-600">₩{payload[0].value?.toLocaleString()} 만원</p>
+                          <p className="text-sm font-black text-blue-600">₩{val.toLocaleString()} 만원</p>
                         </div>
                       );
                     }
