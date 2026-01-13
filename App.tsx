@@ -40,7 +40,7 @@ const App: React.FC = () => {
     method: i.method, unit: i.unit, unitPrice: safeNum(i.unit_price), repairRate: safeNum(i.repair_rate),
     cycleYears: safeNum(i.cycle_years), facilitySize: safeNum(i.facility_size), quantity: safeNum(i.quantity),
     lastRepairYear: safeNum(i.last_repair_year), nextRepairYear: safeNum(i.next_repair_year),
-    estimatedCost: safeNum(i.estimated_cost), status: i.status || '정상', isExecuted: !!i.is_executed,
+    estimatedCost: safeNum(i.estimated_cost), status: (i.status || '정상') as MaintenanceItem['status'], isExecuted: !!i.is_executed,
     isManual: !!i.is_manual, actualCost: safeNum(i.actual_cost), remarks: i.remarks || '',
     breakdown: { material: safeNum(i.material), labor: safeNum(i.labor), expense: safeNum(i.expense) }
   }), []);
@@ -82,7 +82,7 @@ const App: React.FC = () => {
 
         if (stdRes.data) setMasterStandards(stdRes.data.map((s: any) => ({
           id: s.id, code: s.code, mainCategory: s.category, subCategory: s.sub_category, category: s.category, item: s.item, method: s.method, unit: s.unit, unitPrice: safeNum(s.unit_price), 
-          repair_rate: safeNum(s.repair_rate), cycle_years: safeNum(s.cycle_years), last_repair_year: safeNum(s.last_repair_year), 
+          repairRate: safeNum(s.repair_rate), cycleYears: safeNum(s.cycle_years), lastRepairYear: safeNum(s.last_repair_year), 
           breakdown: { material: safeNum(s.material), labor: safeNum(s.labor), expense: safeNum(s.expense) }
         })));
 
