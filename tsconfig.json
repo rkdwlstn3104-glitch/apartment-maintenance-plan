@@ -18,5 +18,5 @@
     "jsx": "react-jsx",
     "types": ["vite/client"]
   },
-  "include": ["src", "*.ts", "*.tsx", "components/ItemDetailStatusReport.tsx"]
+  "include": ["src", "*.ts", "*.tsx", "components/ItemDetailStatusReport.tsx", "components/Login.tsx", "components/Settings.tsx"]
 }

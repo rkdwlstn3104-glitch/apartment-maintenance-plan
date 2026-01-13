@@ -75,30 +75,22 @@ const ApartmentDetail: React.FC<ApartmentDetailProps> = ({ apartment, onUpdate, 
     setHasChanges(false);
   }, [apartment]);
 
-  // 저장 버튼 클릭 시에만 수행되는 최종 무결성 검사
   const validateIntegrity = () => {
     if (localRates.length === 0) return true;
-
-    // 1. 요율 합계 체크
     if (Math.abs(totalRate - 100) > 0.01) {
       alert(`적립요율의 총합은 100%가 되어야 합니다. (현재: ${totalRate}%)`);
       return false;
     }
-
-    // 2. 날짜 연속성 및 범위 체크
     if (localRates[0].startPeriod !== approvalYM) {
       alert(`첫 번째 구간의 시작일은 사용승인일(${approvalYM})과 일치해야 합니다.`);
       return false;
     }
-
     for (let i = 0; i < localRates.length; i++) {
       const r = localRates[i];
-      // 시작일이 종료일보다 늦은 경우 (역전)
       if (r.startPeriod > r.endPeriod) {
         alert(`구간 ${i + 1}의 시작년월이 종료년월보다 늦습니다. 확인 후 다시 시도해주세요.`);
         return false;
       }
-      // 구간 사이의 연속성 (이전 구간 종료일 다음 달이 현재 구간 시작일인지)
       if (i > 0) {
         const prev = localRates[i - 1];
         const expectedStart = addMonth(prev.endPeriod, 1);
@@ -108,23 +100,17 @@ const ApartmentDetail: React.FC<ApartmentDetailProps> = ({ apartment, onUpdate, 
         }
       }
     }
-
-    // 마지막 구간의 종료일이 전체 계획 종료일과 맞는지 확인
     const lastRate = localRates[localRates.length - 1];
     if (lastRate.endPeriod !== planEndYM) {
       alert(`마지막 구간의 종료일(${lastRate.endPeriod})은 계획종료일(${planEndYM})과 일치해야 합니다.`);
       return false;
     }
-
     return true;
   };
 
   const handleSave = async () => {
     if (!localInfo.name) { alert("아파트 이름을 입력해주세요."); return; }
-    
-    // 저장 시점에만 모든 무결성 체크 수행
     if (!validateIntegrity()) return;
-
     setIsSaving(true);
     try {
       await onUpdate({
@@ -163,9 +149,7 @@ const ApartmentDetail: React.FC<ApartmentDetailProps> = ({ apartment, onUpdate, 
     } else {
       const last = newRates[newRates.length - 1];
       const nextStart = addMonth(last.endPeriod, 1);
-      const nextEnd = addMonth(nextStart, 11); // 기본 1년 구간 추가
-
-      // 편집 중이므로 planEndYM을 초과하더라도 일단 추가 허용 (사용자가 나중에 날짜를 직접 조정할 것임)
+      const nextEnd = addMonth(nextStart, 11); 
       newRates.push({ id: crypto.randomUUID(), startPeriod: nextStart, endPeriod: nextEnd, rate: 0 });
       setLocalRates(newRates);
     }
@@ -176,15 +160,11 @@ const ApartmentDetail: React.FC<ApartmentDetailProps> = ({ apartment, onUpdate, 
     setLocalRates(prev => {
       const idx = prev.findIndex(r => r.id === id);
       if (idx === -1) return prev;
-      
       const newRates = [...prev];
       newRates[idx] = { ...newRates[idx], [field]: value };
-      
-      // 사용 편의를 위해: 종료년월이 바뀌면 다음 구간의 시작년월을 자동으로 제안 (강제 고정은 아님)
       if (field === 'endPeriod' && idx < newRates.length - 1) {
         newRates[idx + 1] = { ...newRates[idx + 1], startPeriod: addMonth(value, 1) };
       }
-      
       return newRates;
     });
     setHasChanges(true);
@@ -197,8 +177,6 @@ const ApartmentDetail: React.FC<ApartmentDetailProps> = ({ apartment, onUpdate, 
     }
     const idx = localRates.findIndex(r => r.id === id);
     let updated = [...localRates];
-    
-    // 삭제 시 앞뒤 공백이 생길 수 있으나 사용자가 직접 수정하도록 둠 (자유도 우선)
     updated = updated.filter(r => r.id !== id);
     setLocalRates(updated);
     setHasChanges(true);
@@ -213,7 +191,7 @@ const ApartmentDetail: React.FC<ApartmentDetailProps> = ({ apartment, onUpdate, 
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">{apartment?.name ? '단지 정보 관리' : '신규 단지 등록'}</h2>
           <p className="text-slate-500 mt-1 text-sm font-bold flex items-center gap-2">
             <i className="fas fa-check-circle text-emerald-500"></i>
-            편집 자유 모드 활성화 (저장 시에만 데이터 무결성 점검)
+            전역 마스터 권한으로 단지 정보를 관리합니다.
           </p>
         </div>
         <div className="flex gap-3">
@@ -275,6 +253,7 @@ const ApartmentDetail: React.FC<ApartmentDetailProps> = ({ apartment, onUpdate, 
               </div>
             </div>
           </div>
+
           <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-2xl space-y-4">
              <div className="flex items-center gap-3"><i className="fas fa-users text-blue-400 text-xl"></i><h4 className="text-xl font-black">단지 규모 요약</h4></div>
              <div className="grid grid-cols-2 gap-4 pt-4">
@@ -285,7 +264,6 @@ const ApartmentDetail: React.FC<ApartmentDetailProps> = ({ apartment, onUpdate, 
         </div>
 
         <div className="lg:col-span-8 space-y-8">
-          {/* 세대 유형 구성 관리 생략 (App.tsx와 동일하게 유지) */}
           <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
             <div className="flex justify-between items-center mb-8">
               <h3 className="text-lg font-black flex items-center gap-3 text-slate-900">
@@ -333,7 +311,6 @@ const ApartmentDetail: React.FC<ApartmentDetailProps> = ({ apartment, onUpdate, 
                    const isFirst = idx === 0;
                    const isLast = idx === localRates.length - 1;
                    const hasDateError = r.startPeriod > r.endPeriod;
-                   
                    return (
                      <div key={r.id} className={`p-6 rounded-3xl border transition-all relative group ${hasDateError ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-100'}`}>
                         <button onClick={() => removeRate(r.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"><i className="fas fa-trash-alt text-xs"></i></button>
@@ -345,23 +322,12 @@ const ApartmentDetail: React.FC<ApartmentDetailProps> = ({ apartment, onUpdate, 
                         <div className="space-y-4">
                            <div className="flex items-center gap-2">
                               <div className="flex-1 relative">
-                                <input 
-                                  type="month" 
-                                  value={r.startPeriod} 
-                                  readOnly={isFirst} 
-                                  onChange={(e) => updateRate(r.id, 'startPeriod', e.target.value)} 
-                                  className={`w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none ${isFirst ? 'bg-slate-100 cursor-not-allowed opacity-70' : 'focus:ring-2 focus:ring-blue-500'}`} 
-                                />
+                                <input type="month" value={r.startPeriod} readOnly={isFirst} onChange={(e) => updateRate(r.id, 'startPeriod', e.target.value)} className={`w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none ${isFirst ? 'bg-slate-100 cursor-not-allowed opacity-70' : 'focus:ring-2 focus:ring-blue-500'}`} />
                                 <span className="absolute -top-3 left-2 px-1 bg-white text-[8px] font-black text-slate-400">START</span>
                               </div>
                               <span className="text-slate-300 font-black"><i className="fas fa-arrow-right-long"></i></span>
                               <div className="flex-1 relative">
-                                <input 
-                                  type="month" 
-                                  value={r.endPeriod} 
-                                  onChange={(e) => updateRate(r.id, 'endPeriod', e.target.value)} 
-                                  className={`w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-300`} 
-                                />
+                                <input type="month" value={r.endPeriod} onChange={(e) => updateRate(r.id, 'endPeriod', e.target.value)} className={`w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-300`} />
                                 <span className="absolute -top-3 left-2 px-1 bg-white text-[8px] font-black text-slate-400">END</span>
                               </div>
                            </div>

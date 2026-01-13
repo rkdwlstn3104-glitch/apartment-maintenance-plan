@@ -4,9 +4,10 @@ import React from 'react';
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  onLogout?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout }) => {
   const menuItems = [
     { id: 'dashboard', label: '대시보드', icon: 'fa-chart-line' },
     { id: 'standards', label: '수립 기준 (DB)', icon: 'fa-book-bookmark' },
@@ -15,6 +16,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
     { id: 'history', label: '버전 관리', icon: 'fa-history' },
     { id: 'execution', label: '집행/이력 관리', icon: 'fa-file-invoice-dollar' },
     { id: 'report', label: '검토서/보고서', icon: 'fa-file-pdf' },
+    { id: 'settings', label: '시스템 설정', icon: 'fa-gear' },
   ];
 
   return (
@@ -45,7 +47,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
         ))}
       </nav>
       
-      <div className="p-4 border-t border-slate-800">
+      <div className="p-4 border-t border-slate-800 space-y-3">
+        <button 
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-900/20 text-slate-400 hover:text-red-400 transition-all text-xs font-black"
+        >
+          <i className="fas fa-arrow-right-from-bracket"></i>
+          로그아웃
+        </button>
         <div className="bg-slate-800/50 rounded-xl p-4 text-xs">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
