@@ -20,7 +20,7 @@ const App: React.FC = () => {
   
   const [apartments, setApartments] = useState<Apartment[]>([]);
   const [selectedAptId, setSelectedAptId] = useState<string | null>(null);
-  const prevAptIdRef = useRef<string | null>(null); // 이전 선택 단지 ID 보관
+  const prevAptIdRef = useRef<string | null>(null);
   
   const [allItems, setAllItems] = useState<MaintenanceItem[]>([]);
   const [masterStandards, setMasterStandards] = useState<MaintenanceStandard[]>([]);
@@ -189,21 +189,61 @@ const App: React.FC = () => {
                   apartment={selectedApt} 
                   onUpdate={async (apt) => {
                     const isNew = !apartments.find(a => a.id === apt.id);
-                    setApartments(prev => isNew ? [...prev, apt] : prev.map(a => a.id === apt.id ? apt : a));
-                    setSelectedAptId(apt.id);
-                    prevAptIdRef.current = apt.id;
-                    if (!isDemoMode && isSupabaseConfigured && supabase) {
-                      await supabase.from('apartments').upsert({ id: apt.id, name: apt.name, approval_date: apt.approvalDate, plan_period: apt.planPeriod, inflation_rate: apt.inflationRate });
-                      if (apt.unitTypes) await supabase.from('unit_types').upsert(apt.unitTypes.map(u => ({ ...u, apartment_id: apt.id })));
-                      if (apt.annualRates) await supabase.from('annual_rates').upsert(apt.annualRates.map(r => ({ ...r, apartment_id: apt.id, start_period: r.startPeriod, end_period: r.endPeriod, rate: safeNum(r.rate) })));
+                    
+                    setApartments(prev => {
+                      if (isNew) return [...prev, apt];
+                      return prev.map(a => a.id === apt.id ? { ...a, ...apt } : a);
+                    });
+                    
+                    if (isNew) {
+                      setSelectedAptId(apt.id);
+                      prevAptIdRef.current = apt.id;
                     }
-                    alert(isNew ? "새 단지 등록 완료" : "수정 완료");
+
+                    if (!isDemoMode && isSupabaseConfigured && supabase) {
+                      // 1. 단지 기본 정보
+                      await supabase.from('apartments').upsert({ 
+                        id: apt.id, 
+                        name: apt.name, 
+                        approval_date: apt.approvalDate, 
+                        plan_period: apt.planPeriod, 
+                        inflation_rate: apt.inflationRate 
+                      });
+                      
+                      // 2. 세대 유형 정보 (삭제 후 재등록 전략)
+                      await supabase.from('unit_types').delete().eq('apartment_id', apt.id);
+                      if (apt.unitTypes && apt.unitTypes.length > 0) {
+                        const unitPayload = apt.unitTypes.map(u => ({
+                          id: u.id,
+                          apartment_id: apt.id,
+                          type: u.type,
+                          private_area: u.privateArea,
+                          common_area: u.supplyArea,
+                          households: u.households
+                        }));
+                        await supabase.from('unit_types').insert(unitPayload);
+                      }
+                      
+                      // 3. 연차별 적립 요율 정보 (무결성을 위한 삭제 후 재등록 전략)
+                      await supabase.from('annual_rates').delete().eq('apartment_id', apt.id);
+                      if (apt.annualRates && apt.annualRates.length > 0) {
+                        const ratePayload = apt.annualRates.map(r => ({
+                          id: r.id,
+                          apartment_id: apt.id,
+                          start_period: r.startPeriod,
+                          end_period: r.endPeriod,
+                          rate: safeNum(r.rate)
+                        }));
+                        await supabase.from('annual_rates').insert(ratePayload);
+                      }
+                    }
+                    alert(isNew ? "새 단지 등록 완료" : "변경사항 저장 완료");
                   }} 
                   onAdd={() => { if (selectedAptId) prevAptIdRef.current = selectedAptId; setSelectedAptId(null); }} 
                   onCancelAdd={() => { setSelectedAptId(prevAptIdRef.current || (apartments.length > 0 ? apartments[0].id : null)); }}
                   onDelete={async () => {
                     if (!selectedAptId) return;
-                    if (!window.confirm("단지를 삭제하시겠습니까?")) return;
+                    if (!window.confirm("단지를 삭제하시겠습니까? 관련한 모든 데이터가 삭제됩니다.")) return;
                     if (!isDemoMode && isSupabaseConfigured && supabase) await supabase.from('apartments').delete().eq('id', selectedAptId);
                     const remaining = apartments.filter(a => a.id !== selectedAptId);
                     setApartments(remaining);
