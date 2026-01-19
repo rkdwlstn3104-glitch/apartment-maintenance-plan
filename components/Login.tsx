@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
+import { UserAccount } from '../types';
 
 interface LoginProps {
-  onLogin: (id: string, pw: string) => Promise<boolean>;
+  onLogin: (id: string, pw: string) => Promise<UserAccount | null>;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
@@ -16,8 +17,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setIsLoggingIn(true);
     setError(false);
     
-    const success = await onLogin(id, pw);
-    if (success) {
+    const user = await onLogin(id, pw);
+    if (user) {
       setError(false);
     } else {
       setError(true);
@@ -37,8 +38,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl mx-auto mb-6 shadow-xl shadow-blue-500/20">
               <i className="fas fa-shield-halved"></i>
             </div>
-            <h1 className="text-2xl font-black text-white tracking-tight">수선계획 Pro 마스터 로그인</h1>
-            <p className="text-slate-400 text-xs font-bold mt-2 uppercase tracking-widest">Master Administration System</p>
+            <h1 className="text-2xl font-black text-white tracking-tight leading-tight">수선계획 Pro<br/>통합 관리 로그인</h1>
+            <p className="text-slate-400 text-xs font-bold mt-2 uppercase tracking-widest">Unified Management System</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -51,7 +52,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   disabled={isLoggingIn}
                   onChange={(e) => setId(e.target.value)}
                   className="w-full bg-white/5 border border-white/10 rounded-2xl px-12 py-4 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-sm disabled:opacity-50"
-                  placeholder="Admin ID"
+                  placeholder="ID"
                 />
                 <i className="fas fa-user absolute left-5 top-1/2 -translate-y-1/2 text-white/30"></i>
               </div>
@@ -92,13 +93,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </button>
           </form>
 
-          <div className="mt-6 p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Initial Credentials</p>
-            <p className="text-[11px] text-blue-400 font-black">ID: <span className="text-white">admin</span> / PW: <span className="text-white">1234</span></p>
-          </div>
-
           <div className="mt-8 pt-8 border-t border-white/5 text-center">
-             <p className="text-[10px] text-white/20 font-medium">© 2025 Apartment Maintenance Pro Engine. v1.5.0</p>
+             <p className="text-[10px] text-white/20 font-medium">© 2025 Apartment Pro RBAC Engine. v1.5.0</p>
           </div>
         </div>
       </div>

@@ -68,7 +68,8 @@ const ItemDetailStatusReport: React.FC<ItemDetailStatusReportProps> = ({ items, 
                 {/* 8열: 수선공사 설명 데이터 */}
                 <tr className="min-h-[80px]">
                   <td className="border border-black p-4 text-left align-top leading-relaxed" colSpan={4}>
-                    {item.remarks || item.detail || '특이사항 없음'}
+                    {/* Fix: Property 'detail' does not exist on type 'MaintenanceItem'. Use 'remarks' only. */}
+                    {item.remarks || '특이사항 없음'}
                   </td>
                 </tr>
               </tbody>

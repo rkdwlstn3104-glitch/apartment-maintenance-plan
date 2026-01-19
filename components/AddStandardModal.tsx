@@ -68,6 +68,7 @@ const AddStandardModal: React.FC<AddStandardModalProps> = ({ isOpen, onClose, on
 
     const nextCode = generateNextCode(formData.subCategory);
     
+    // Fix: Flatten 'breakdown' into 'material', 'labor', 'expense' to match MaintenanceStandard interface
     const newStandard: MaintenanceStandard = {
       id: crypto.randomUUID(),
       code: nextCode, 
@@ -81,11 +82,9 @@ const AddStandardModal: React.FC<AddStandardModalProps> = ({ isOpen, onClose, on
       repairRate: formData.repairRate,
       cycleYears: formData.cycleYears,
       lastRepairYear: formData.lastRepairYear,
-      breakdown: { 
-        material: formData.material, 
-        labor: formData.labor, 
-        expense: formData.expense 
-      },
+      material: formData.material, 
+      labor: formData.labor, 
+      expense: formData.expense,
       remarks: formData.remarks
     };
 

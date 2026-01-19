@@ -25,8 +25,9 @@ const SummaryReport: React.FC<SummaryReportProps> = ({ items, apartment, startYe
     apartment.unitTypes?.reduce((sum, ut) => sum + (Number(ut.households) || 0), 0) || 0
   , [apartment]);
 
+  // 프론트엔드 컨벤션 commonArea를 사용하여 총 공급면적(전용 + 공용) 계산
   const totalSupplyArea = useMemo(() => 
-    apartment.unitTypes?.reduce((sum, ut) => sum + ((Number(ut.privateArea) + Number(ut.supplyArea)) * Number(ut.households) || 0), 0) || 0
+    apartment.unitTypes?.reduce((sum, ut) => sum + ((Number(ut.privateArea) + Number(ut.commonArea)) * Number(ut.households) || 0), 0) || 0
   , [apartment]);
 
   const section1Data = useMemo(() => {
@@ -34,7 +35,7 @@ const SummaryReport: React.FC<SummaryReportProps> = ({ items, apartment, startYe
       // 1. 해당 그룹에 속하는 항목 필터링
       const groupItems = items.filter(item => group.categories.includes(item.mainCategory));
       
-      // 2. 이미 계산된 estimatedCost(만원 단위)를 합산 (계산 로직 중복 및 불일치 방지)
+      // 2. 이미 계산된 estimatedCost(만원 단위)를 합산
       const totalCost = groupItems.reduce((sum, item) => {
         const costManWon = Number(item.estimatedCost) || 0;
         return sum + (costManWon * 10000);

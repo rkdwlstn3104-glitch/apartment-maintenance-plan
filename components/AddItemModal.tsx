@@ -40,6 +40,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onAdd }) =
       return;
     }
 
+    // Fix: Remove 'detail' and flatten 'breakdown' into 'material', 'labor', 'expense' to match MaintenanceStandard interface
     const newStandard: MaintenanceStandard = {
       id: crypto.randomUUID(),
       code: 'NEW', // 실제 시스템에서는 카테고리별 코드를 자동 생성할 수 있음
@@ -47,14 +48,15 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onAdd }) =
       subCategory: formData.subCategory,
       category: formData.mainCategory as MaintenanceCategory,
       item: formData.item,
-      detail: `${formData.subCategory} 관련 신규 공사`,
       method: formData.method,
       unit: formData.unit,
       unitPrice: formData.unitPrice,
       repairRate: formData.repairRate,
       cycleYears: formData.cycleYears,
       lastRepairYear: 2025,
-      breakdown: { material: 0, labor: 0, expense: 0 },
+      material: 0,
+      labor: 0,
+      expense: 0,
       remarks: formData.remarks
     };
 

@@ -32,9 +32,9 @@ const StandardRow = memo(({
     cycleYears: std.cycleYears,
     repairRate: std.repairRate,
     unit: std.unit || '',
-    material: std.breakdown?.material || 0,
-    labor: std.breakdown?.labor || 0,
-    expense: std.breakdown?.expense || 0,
+    material: std.material || 0,
+    labor: std.labor || 0,
+    expense: std.expense || 0,
     lastRepairYear: std.lastRepairYear || 2025,
     remarks: std.remarks || ''
   });
@@ -47,9 +47,9 @@ const StandardRow = memo(({
       cycleYears: std.cycleYears,
       repairRate: std.repairRate,
       unit: std.unit || '',
-      material: std.breakdown?.material || 0,
-      labor: std.breakdown?.labor || 0,
-      expense: std.breakdown?.expense || 0,
+      material: std.material || 0,
+      labor: std.labor || 0,
+      expense: std.expense || 0,
       lastRepairYear: std.lastRepairYear || 2025,
       remarks: std.remarks || ''
     });
@@ -76,11 +76,9 @@ const StandardRow = memo(({
       unit: localValues.unit,
       unitPrice: totalWon / 10000,
       lastRepairYear: Number(localValues.lastRepairYear),
-      breakdown: {
-        material: Number(localValues.material),
-        labor: Number(localValues.labor),
-        expense: Number(localValues.expense)
-      },
+      material: Number(localValues.material),
+      labor: Number(localValues.labor),
+      expense: Number(localValues.expense),
       remarks: localValues.remarks
     });
   };
@@ -264,9 +262,9 @@ const MaintenanceStandards: React.FC<MaintenanceStandardsProps> = ({ standards, 
       "주기(년)": s.cycleYears,
       "수선율(%)": s.repairRate,
       "단위": s.unit,
-      "재료비": s.breakdown?.material || 0,
-      "노무비": s.breakdown?.labor || 0,
-      "경비": s.breakdown?.expense || 0,
+      "재료비": s.material || 0,
+      "노무비": s.labor || 0,
+      "경비": s.expense || 0,
       "표준단가": s.unitPrice * 10000,
       "최종수선(단가기준)": s.lastRepairYear,
       "비고": s.remarks || ""
@@ -292,9 +290,9 @@ const MaintenanceStandards: React.FC<MaintenanceStandardsProps> = ({ standards, 
         <td style="text-align:center">${s.cycleYears}</td>
         <td style="text-align:center">${s.repairRate}%</td>
         <td style="text-align:center">${s.unit}</td>
-        <td style="text-align:right">${(s.breakdown?.material || 0).toLocaleString()}</td>
-        <td style="text-align:right">${(s.breakdown?.labor || 0).toLocaleString()}</td>
-        <td style="text-align:right">${(s.breakdown?.expense || 0).toLocaleString()}</td>
+        <td style="text-align:right">${(s.material || 0).toLocaleString()}</td>
+        <td style="text-align:right">${(s.labor || 0).toLocaleString()}</td>
+        <td style="text-align:right">${(s.expense || 0).toLocaleString()}</td>
         <td style="text-align:right; font-weight:bold">${Math.round(s.unitPrice * 10000).toLocaleString()}</td>
         <td style="text-align:center; color:#b45309">${s.lastRepairYear}</td>
       </tr>
