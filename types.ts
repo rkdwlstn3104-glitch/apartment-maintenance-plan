@@ -60,9 +60,9 @@ export interface MaintenanceStandard {
   repairRate: number; 
   cycleYears: number; 
   lastRepairYear: number; 
-  material: number; // DB 이미지에 맞춰 flat 필드로 변경
-  labor: number;    // DB 이미지에 맞춰 flat 필드로 변경
-  expense: number;  // DB 이미지에 맞춰 flat 필드로 변경
+  material: number; 
+  labor: number;    
+  expense: number;  
   remarks?: string; 
 }
 
@@ -75,6 +75,7 @@ export interface MaintenanceItem extends MaintenanceStandard {
   actualCost?: number;    
   actualRepairYear?: number;
   isExecuted?: boolean;   
+  isManual?: boolean; // 추가: 직접 추가한 항목인지 여부
   status: '정상' | '검토필요' | '긴급';
 }
 

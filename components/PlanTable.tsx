@@ -284,18 +284,14 @@ const PlanTable: React.FC<PlanTableProps> = ({ items, masterStandards, planPerio
   };
 
   const filteredItems = useMemo(() => {
-    // CATEGORIES 순서를 맵으로 저장 (정렬용)
     const categoryOrder = CATEGORIES.reduce((acc, cat, idx) => ({ ...acc, [cat]: idx }), {} as Record<string, number>);
 
     return items
       .filter(i => (filterCategory === '전체' || i.mainCategory === filterCategory) && (i.item || '').includes(searchTerm))
       .sort((a, b) => {
-        // 1. 대분류 순서로 정렬
         const catA = categoryOrder[a.mainCategory] ?? 999;
         const catB = categoryOrder[b.mainCategory] ?? 999;
         if (catA !== catB) return catA - catB;
-
-        // 2. 분류 내에서는 코드(Prefix-Suffix) 순서로 정렬 (NEW 항목이 자연스럽게 뒤로 감)
         return (a.code || '').localeCompare(b.code || '', undefined, { numeric: true });
       });
   }, [items, searchTerm, filterCategory]);

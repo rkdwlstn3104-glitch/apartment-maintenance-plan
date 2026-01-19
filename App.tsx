@@ -111,6 +111,7 @@ const App: React.FC = () => {
             nextRepairYear: Number(i.next_repair_year) || 0,
             estimatedCost: Number(i.estimated_cost) || 0,
             isExecuted: i.is_executed ?? false,
+            isManual: i.is_manual ?? false,
             status: (i.status || '정상') as MaintenanceItem['status'],
             remarks: i.remarks || '',
             material: Number(i.breakdown?.material) || 0,
@@ -183,9 +184,10 @@ const App: React.FC = () => {
         last_repair_year: Number(i.lastRepairYear) || 0,
         facility_size: Number(i.facilitySize) || 0, 
         quantity: Number(i.quantity) || 1, 
-        next_repair_year: Number(i.nextRepairYear) || 0, // i.next_repair_year -> i.nextRepairYear 로 수정
+        next_repair_year: Number(i.nextRepairYear) || 0,
         estimated_cost: Number(i.estimatedCost) || 0, 
         is_executed: i.isExecuted ?? false,
+        is_manual: i.isManual ?? false,
         status: i.status || '정상', 
         remarks: i.remarks || '',
         breakdown: {
@@ -210,8 +212,8 @@ const App: React.FC = () => {
           main_category: i.mainCategory, sub_category: i.subCategory, item: i.item,
           method: i.method, unit: i.unit, unit_price: i.unitPrice, repair_rate: i.repairRate,
           cycle_years: i.cycleYears, last_repair_year: i.lastRepairYear, facility_size: i.facilitySize,
-          quantity: i.quantity, next_repair_year: i.nextRepairYear, estimated_cost: i.estimatedCost, // i.next_repair_year -> i.nextRepairYear 로 수정
-          is_executed: i.isExecuted, status: i.status, remarks: i.remarks,
+          quantity: i.quantity, next_repair_year: i.nextRepairYear, estimated_cost: i.estimatedCost,
+          is_executed: i.isExecuted, is_manual: i.isManual, status: i.status, remarks: i.remarks,
           breakdown: { material: i.material, labor: i.labor, expense: i.expense }
         }));
         await supabase.from('maintenance_items').insert(dbItems);
@@ -304,7 +306,7 @@ const App: React.FC = () => {
                     await handleUpdateItems(newItems);
                   }}
                   onAdd={(std) => {
-                    const newItem: MaintenanceItem = { ...std, id: crypto.randomUUID(), apartmentId: selectedApt.id, facilitySize: 0, quantity: 1, nextRepairYear: new Date().getFullYear() + std.cycleYears, estimatedCost: 0, isExecuted: false, status: '정상' };
+                    const newItem: MaintenanceItem = { ...std, id: crypto.randomUUID(), apartmentId: selectedApt.id, facilitySize: 0, quantity: 1, nextRepairYear: new Date().getFullYear() + std.cycleYears, estimatedCost: 0, isExecuted: false, isManual: true, status: '정상' };
                     handleUpdateItems([newItem]);
                   }}
                   onDelete={async (id) => {
@@ -336,7 +338,7 @@ const App: React.FC = () => {
                   onUpdate={async (apt) => {
                     if (!isDemoMode && isSupabaseConfigured && supabase) {
                       const { error } = await supabase.from('apartments').upsert({
-                        id: apt.id, name: apt.name, approval_date: apt.approvalDate, plan_period: apt.planPeriod, // apt.plan_period -> apt.planPeriod 수정
+                        id: apt.id, name: apt.name, approval_date: apt.approvalDate, plan_period: apt.planPeriod, 
                         inflation_rate: apt.inflationRate, unit_types: apt.unitTypes, annual_rates: apt.annualRates
                       });
                       if (error) { alert("저장 실패: " + error.message); return; }
@@ -409,7 +411,7 @@ const App: React.FC = () => {
           onConfirm={async (data) => {
             const h: MaintenanceHistory = { id: crypto.randomUUID(), itemId: executingItem.id, apartmentId: selectedAptId!, itemName: executingItem.item, executionYear: new Date(data.executionDate).getFullYear(), executionDate: data.executionDate, plannedCost: Number(executingItem.estimatedCost) * 10000, actualCost: data.actualCost, contractor: data.contractor, remarks: data.remarks, createdAt: new Date().toISOString() };
             setHistories(prev => [h, ...prev]);
-            if (!isDemoMode && isSupabaseConfigured && supabase) await supabase.from('maintenance_history').insert({ id: h.id, item_id: h.itemId, apartment_id: h.apartmentId, item_name: h.itemName, execution_year: h.executionYear, execution_date: h.executionDate, planned_cost: h.plannedCost, actual_cost: h.actualCost, contractor: h.contractor, remarks: h.remarks }); // h.execution_date -> h.executionDate 등 프로퍼티 수정
+            if (!isDemoMode && isSupabaseConfigured && supabase) await supabase.from('maintenance_history').insert({ id: h.id, item_id: h.itemId, apartment_id: h.apartmentId, item_name: h.itemName, execution_year: h.executionYear, execution_date: h.executionDate, planned_cost: h.plannedCost, actual_cost: h.actualCost, contractor: h.contractor, remarks: h.remarks });
             handleUpdateItems([{ ...executingItem, isExecuted: true }]);
             setExecutingItem(null);
           }} 
