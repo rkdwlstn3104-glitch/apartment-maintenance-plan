@@ -111,7 +111,7 @@ const App: React.FC = () => {
             nextRepairYear: Number(i.next_repair_year) || 0,
             estimatedCost: Number(i.estimated_cost) || 0,
             isExecuted: i.is_executed ?? false,
-            isManual: i.is_manual ?? false,
+            isManual: false, // DB에 컬럼이 없으므로 로드 시 기본값 설정
             status: (i.status || '정상') as MaintenanceItem['status'],
             remarks: i.remarks || '',
             material: Number(i.breakdown?.material) || 0,
@@ -169,6 +169,7 @@ const App: React.FC = () => {
     });
     
     if (!isDemoMode && isSupabaseConfigured && supabase) {
+      // DB 스키마에 맞춰 필드명 매핑 (is_manual 제거)
       const dbItems = updatedItems.map(i => ({
         id: i.id, 
         apartment_id: i.apartmentId, 
@@ -187,7 +188,7 @@ const App: React.FC = () => {
         next_repair_year: Number(i.nextRepairYear) || 0,
         estimated_cost: Number(i.estimatedCost) || 0, 
         is_executed: i.isExecuted ?? false,
-        is_manual: i.isManual ?? false,
+        // is_manual 필드는 DB 스키마에 없으므로 제외
         status: i.status || '정상', 
         remarks: i.remarks || '',
         breakdown: {
@@ -207,11 +208,12 @@ const App: React.FC = () => {
       if (!isDemoMode && isSupabaseConfigured && supabase) {
         setLoading(true);
         await supabase.from('maintenance_items').delete().eq('apartment_id', snap.apartmentId);
+        // DB 스키마에 맞춰 필드명 매핑 (is_manual 제거)
         const dbItems = snap.items.map(i => ({
           id: i.id, 
           apartment_id: i.apartmentId, 
           code: i.code, 
-          main_category: i.mainCategory, 
+          main_category: i.mainCategory || i.category, 
           sub_category: i.subCategory, 
           item: i.item,
           method: i.method, 
@@ -225,7 +227,7 @@ const App: React.FC = () => {
           next_repair_year: i.nextRepairYear, 
           estimated_cost: i.estimatedCost,
           is_executed: i.isExecuted, 
-          is_manual: i.isManual, 
+          // is_manual 제외
           status: i.status, 
           remarks: i.remarks,
           breakdown: { material: i.material, labor: i.labor, expense: i.expense }
