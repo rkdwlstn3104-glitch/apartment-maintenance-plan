@@ -142,7 +142,7 @@ const App: React.FC = () => {
             apartmentId: s.apartment_id, 
             versionName: s.version_name,
             createdAt: s.created_at, 
-            item_count: s.item_count, 
+            itemCount: s.item_count, 
             totalCost: Number(s.total_cost), 
             items: s.items
           } as any)));
@@ -208,12 +208,26 @@ const App: React.FC = () => {
         setLoading(true);
         await supabase.from('maintenance_items').delete().eq('apartment_id', snap.apartmentId);
         const dbItems = snap.items.map(i => ({
-          id: i.id, apartment_id: i.apartmentId, code: i.code, 
-          main_category: i.mainCategory, sub_category: i.subCategory, item: i.item,
-          method: i.method, unit: i.unit, unit_price: i.unitPrice, repair_rate: i.repairRate,
-          cycle_years: i.cycleYears, last_repair_year: i.lastRepairYear, facility_size: i.facilitySize,
-          quantity: i.quantity, next_repair_year: i.nextRepairYear, estimated_cost: i.estimatedCost,
-          is_executed: i.isExecuted, is_manual: i.isManual, status: i.status, remarks: i.remarks,
+          id: i.id, 
+          apartment_id: i.apartmentId, 
+          code: i.code, 
+          main_category: i.mainCategory, 
+          sub_category: i.subCategory, 
+          item: i.item,
+          method: i.method, 
+          unit: i.unit, 
+          unit_price: i.unitPrice, 
+          repair_rate: i.repairRate,
+          cycle_years: i.cycleYears, 
+          last_repair_year: i.lastRepairYear, 
+          facility_size: i.facilitySize,
+          quantity: i.quantity, 
+          next_repair_year: i.nextRepairYear, 
+          estimated_cost: i.estimatedCost,
+          is_executed: i.isExecuted, 
+          is_manual: i.isManual, 
+          status: i.status, 
+          remarks: i.remarks,
           breakdown: { material: i.material, labor: i.labor, expense: i.expense }
         }));
         await supabase.from('maintenance_items').insert(dbItems);
@@ -255,6 +269,24 @@ const App: React.FC = () => {
     const user = userAccounts.find(u => u.username === id && u.password === pw);
     if (user) { setCurrentUser(user); return user; }
     return null;
+  };
+
+  const handleUpdateMasterPassword = async (current: string, next: string): Promise<boolean> => {
+    if (!currentUser) return false;
+    if (currentUser.password !== current) return false;
+    try {
+      if (!isDemoMode && isSupabaseConfigured && supabase) {
+        const { error } = await supabase.from('admin_users').update({ password: next }).eq('id', currentUser.id);
+        if (error) throw error;
+      }
+      const updatedUser = { ...currentUser, password: next };
+      setCurrentUser(updatedUser);
+      setUserAccounts(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+      return true;
+    } catch (err) {
+      console.error("비밀번호 변경 실패:", err);
+      return false;
+    }
   };
 
   if (!currentUser) return <Login onLogin={handleLogin} />;
@@ -338,8 +370,13 @@ const App: React.FC = () => {
                   onUpdate={async (apt) => {
                     if (!isDemoMode && isSupabaseConfigured && supabase) {
                       const { error } = await supabase.from('apartments').upsert({
-                        id: apt.id, name: apt.name, approval_date: apt.approvalDate, plan_period: apt.planPeriod, 
-                        inflation_rate: apt.inflationRate, unit_types: apt.unitTypes, annual_rates: apt.annualRates
+                        id: apt.id, 
+                        name: apt.name, 
+                        approval_date: apt.approvalDate, 
+                        plan_period: apt.planPeriod, 
+                        inflation_rate: apt.inflationRate, 
+                        unit_types: apt.unitTypes, 
+                        annual_rates: apt.annualRates
                       });
                       if (error) { alert("저장 실패: " + error.message); return; }
                     }
@@ -368,7 +405,21 @@ const App: React.FC = () => {
                     setMasterStandards(stds);
                     if (!isDemoMode && isSupabaseConfigured && supabase) {
                       const dbStds = stds.map(s => ({
-                        id: s.id, code: s.code, category: s.category, sub_category: s.subCategory, item: s.item, method: s.method, unit: s.unit, unit_price: s.unitPrice, repair_rate: s.repairRate, cycle_years: s.cycleYears, last_repair_year: s.lastRepairYear, material: s.material, labor: s.labor, expense: s.expense, remarks: s.remarks
+                        id: s.id, 
+                        code: s.code, 
+                        category: s.mainCategory, 
+                        sub_category: s.subCategory, 
+                        item: s.item, 
+                        method: s.method, 
+                        unit: s.unit, 
+                        unit_price: s.unitPrice, 
+                        repair_rate: s.repairRate, 
+                        cycle_years: s.cycleYears, 
+                        last_repair_year: s.lastRepairYear, 
+                        material: s.material, 
+                        labor: s.labor, 
+                        expense: s.expense, 
+                        remarks: s.remarks
                       }));
                       await supabase.from('maintenance_standards').upsert(dbStds);
                     }
@@ -398,7 +449,7 @@ const App: React.FC = () => {
                   }}
                 />
               )}
-              {activeTab === 'settings' && <Settings onUpdatePassword={async () => true} />}
+              {activeTab === 'settings' && <Settings onUpdatePassword={handleUpdateMasterPassword} />}
             </>
           )}
         </div>
@@ -409,9 +460,35 @@ const App: React.FC = () => {
           item={executingItem} 
           onClose={() => setExecutingItem(null)} 
           onConfirm={async (data) => {
-            const h: MaintenanceHistory = { id: crypto.randomUUID(), itemId: executingItem.id, apartmentId: selectedAptId!, itemName: executingItem.item, executionYear: new Date(data.executionDate).getFullYear(), executionDate: data.executionDate, plannedCost: Number(executingItem.estimatedCost) * 10000, actualCost: data.actualCost, contractor: data.contractor, remarks: data.remarks, createdAt: new Date().toISOString() };
+            const h: MaintenanceHistory = { 
+              id: crypto.randomUUID(), 
+              itemId: executingItem.id, 
+              apartmentId: selectedAptId!, 
+              itemName: executingItem.item, 
+              executionYear: new Date(data.executionDate).getFullYear(), 
+              executionDate: data.executionDate, 
+              plannedCost: Number(executingItem.estimatedCost) * 10000, 
+              actualCost: data.actualCost, 
+              contractor: data.contractor, 
+              remarks: data.remarks, 
+              createdAt: new Date().toISOString() 
+            };
             setHistories(prev => [h, ...prev]);
-            if (!isDemoMode && isSupabaseConfigured && supabase) await supabase.from('maintenance_history').insert({ id: h.id, item_id: h.itemId, apartment_id: h.apartmentId, item_name: h.itemName, execution_year: h.executionYear, execution_date: h.executionDate, planned_cost: h.plannedCost, actual_cost: h.actualCost, contractor: h.contractor, remarks: h.remarks });
+            
+            if (!isDemoMode && isSupabaseConfigured && supabase) {
+              await supabase.from('maintenance_history').insert({ 
+                id: h.id, 
+                item_id: h.itemId, 
+                apartment_id: h.apartmentId, 
+                item_name: h.itemName, 
+                execution_year: h.executionYear, 
+                execution_date: h.executionDate, 
+                planned_cost: h.plannedCost, 
+                actual_cost: h.actualCost, 
+                contractor: h.contractor, 
+                remarks: h.remarks 
+              });
+            }
             handleUpdateItems([{ ...executingItem, isExecuted: true }]);
             setExecutingItem(null);
           }} 
